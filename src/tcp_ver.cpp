@@ -12,6 +12,7 @@
 #include <vision_msgs/Detection2DArray.h>
 #include "ViewLink.h"
 #include "kari_dronecop_rd_payload_mgmt/payload_mc_gimbal_ctrl_cmd.h"
+#include "kari_dronecop_rd_imgproc/BoundingBox.h"
 #include "kari_dronecop_rd_imgproc/BoundingBoxes.h"
 
 #include <boost/format.hpp>
@@ -31,7 +32,8 @@ public:
     Gimbal(ros::NodeHandle& nh, ros::NodeHandle& nhp) 
     : is_first_loop(true), 
     ir_pip_disable_count(0),
-    detection_image_count(0)
+    detection_image_count(0),
+    save_detection_image(false)
     {
         // Get home directory
         const char* home_dir = getenv("HOME");
@@ -212,8 +214,10 @@ public:
         // void detectionCallback(const vision_msgs::Detection2DArray::ConstPtr msg) {
         if (msg->bounding_boxes.size() > 0) {
             double time_now_sec = ros::Time::now().toSec();
-            if (time_now_sec - last_capture_time_sec > 1.0 && save_detection_image) {
-                saveDetectionImages(msg->img_ros_res); // @TODO Check if the detection image is actually included
+            if (time_now_sec - last_capture_time_sec > 1.0 && 
+                    save_detection_image && 
+                    msg->bounding_boxes[0].class_info == "drone") {
+                saveDetectionImages(msg->img_ros_res, msg->bounding_boxes[0]); // @TODO Check if the detection image is actually included
                 last_capture_time_sec = time_now_sec;
             }
         }
@@ -221,11 +225,12 @@ public:
 
     void testImageCallback(const sensor_msgs::Image& msg) {
         if (ros::Time::now().toSec() - last_capture_time_sec > 1.0 && save_detection_image) {
-            saveDetectionImages(msg); // @TODO Check if the detection image is actually included
+            // saveDetectionImages(msg); // @TODO Check if the detection image is actually included
         }
     }
 
-    bool saveDetectionImages(const sensor_msgs::Image& image_msg) {
+    bool saveDetectionImages(const sensor_msgs::Image& image_msg,
+            const kari_dronecop_rd_imgproc::BoundingBox bbox) {
         // capture detection image for any detection
         // ref: https://github.com/ros-perception/image_pipeline/blob/noetic/image_view/src/nodes/image_saver.cpp#L145
         cv::Mat image;
@@ -259,8 +264,11 @@ public:
                 timestamp_ss << std::put_time(std::localtime(&in_time_t), "%H-%M-%S");
                 // timestamp_ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d_%H-%M-%S");
                 
+                std::string bbox_center = 
+                    "x" + std::to_string((int)((bbox.xmin + bbox.xmax)/2.0)) + "_" +
+                    "y" + std::to_string((int)((bbox.ymin + bbox.ymax)/2.0));
                 // Construct final filename with timestamp
-                std::string final_filename = timestamp_ss.str() + "_" + filename;
+                std::string final_filename = timestamp_ss.str() + "_" + bbox_center + "_" + filename;
                 std::string full_path = fs::path(save_dir) / final_filename;
 
                 try {

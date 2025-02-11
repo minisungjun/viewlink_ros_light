@@ -6,7 +6,7 @@ pan_rate_cmd: 0.0
 tilt_rate_cmd: 0.0
 zoom_pos_cmd: 0.0
 img_select_cmd: 0
-img_capture_cmd: 0
+img_capture_cmd: 1
 homing_mode_cmd: 0
 netgun_mode_cmd: 0
 offbd_mode_cmd: 0
