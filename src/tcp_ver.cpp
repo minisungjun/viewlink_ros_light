@@ -21,6 +21,9 @@ public:
             ros::shutdown();
         }
 
+        // Register device status callback
+        VLK_RegisterDevStatusCB(Gimbal::DeviceStatusCallback, this);
+
         // TCP 연결 설정
         VLK_CONN_PARAM connParam;
         connParam.emType = VLK_CONN_TYPE_TCP;
@@ -41,6 +44,22 @@ public:
         VLK_UnInit();
     }
 
+    // Callback function to receive device status
+    static int DeviceStatusCallback(int iType, const char* szBuffer, int iBufLen, void* pUserParam) {
+        Gimbal* gimbal = static_cast<Gimbal*>(pUserParam);
+        if (iType == VLK_DEV_STATUS_TYPE_TELEMETRY && iBufLen == sizeof(VLK_DEV_TELEMETRY)) {
+            const VLK_DEV_TELEMETRY* telemetry = reinterpret_cast<const VLK_DEV_TELEMETRY*>(szBuffer);
+            gimbal->updateTelemetry(*telemetry);
+        }
+        return 0;
+    }
+    // Update telemetry data (called from callback)
+    void updateTelemetry(const VLK_DEV_TELEMETRY& newTelemetry) {
+        std::lock_guard<std::mutex> lock(telemetry_mutex);
+        current_telemetry = newTelemetry;
+        telemetry_updated = true;
+    }
+
     void gimbalCmdCallback(const std_msgs::Float32MultiArray::ConstPtr& msg) {
         if (msg->data.size() < 3) {
             ROS_WARN("Received invalid gimbal command");
@@ -57,25 +76,35 @@ public:
         VLK_TurnTo(yaw, pitch);  // 짐벌은 Roll을 직접 지원하지 않으므로 Pitch, Yaw만 사용
     }
 
-    void gcsCmdCallback(const kari_dronecop_rd_payload_mgmt::payload_mc_gimbal_ctrl_cmd::ConstPtr msg)
-    {
+    void gcsCmdCallback(const kari_dronecop_rd_payload_mgmt::payload_mc_gimbal_ctrl_cmd::ConstPtr msg) {
         double pan_rate_cmd = msg->pan_rate_cmd;
         double tilt_rate_cmd = msg->tilt_rate_cmd;
 
         ROS_INFO("Setting Gimbal Rate - pan rate: %.2f, tilt rate: %.2f", pan_rate_cmd, tilt_rate_cmd);
-
-        // ViewLink SDK를 사용하여 짐벌 움직이기
-        // VLK_TurnTo(yaw, pitch);  // 짐벌은 Roll을 직접 지원하지 않으므로 Pitch, Yaw만 사용
         VLK_Move(pan_rate_cmd * cmd_multiple, tilt_rate_cmd * cmd_multiple);
     }
 
     void getGimbalPose() {
-        VLK_DEV_TELEMETRY telemetry;
-        if (VLK_IsTCPConnected()) {
-            VLK_QueryDevConfiguration();  // 짐벌 상태 요청
+        if (!VLK_IsTCPConnected()) {
+            ROS_WARN_THROTTLE(1, "Gimbal not connected");
+            return;
         }
 
-        // Pose 데이터 발행
+        // Query device configuration to trigger a telemetry update
+        VLK_QueryDevConfiguration();
+
+        // Get latest telemetry data
+        VLK_DEV_TELEMETRY telemetry;
+        {
+            std::lock_guard<std::mutex> lock(telemetry_mutex);
+            if (!telemetry_updated) {
+                ROS_WARN_THROTTLE(1, "No telemetry data available");
+                return;
+            }
+            telemetry = current_telemetry;
+        }
+
+        // Publish pose data
         std_msgs::Float32MultiArray pose_msg;
         pose_msg.data.resize(3);
         pose_msg.data[0] = 0.0;                // Roll (짐벌에서 지원 X)
@@ -91,6 +120,11 @@ public:
 private:
     ros::Subscriber cmd_sub, gcs_cmd_sub;
     ros::Publisher pose_pub;
+    
+    // Telemetry data storage
+    std::mutex telemetry_mutex;
+    VLK_DEV_TELEMETRY current_telemetry;
+    bool telemetry_updated = false;
 };
 
 int main(int argc, char** argv) {
@@ -101,7 +135,7 @@ int main(int argc, char** argv) {
     ros::Rate rate(gimbal.rate_hz);
 
     while (ros::ok()) {
-        // gimbal.getGimbalPose();
+        gimbal.getGimbalPose();  // Now we can safely call this
         ros::spinOnce();
         rate.sleep();
     }
