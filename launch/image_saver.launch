@@ -1,0 +1,11 @@
+<launch>
+
+    <node name="image_saver" pkg="image_view" type="image_saver" respawn="false" output="screen" >
+        <!-- <param name="save_dir" value="/home/usrg/dronecop_ws" /> -->
+        <param name="save_all_image" value="false" />
+        <param name="filename_format" value="image_%04d.jpg" />
+        <remap from="image" to="/image_raw" />
+        <!-- <param name="encoding" value="rgb8" /> -->
+    </node>
+
+</launch>

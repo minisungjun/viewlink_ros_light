@@ -1,17 +1,20 @@
 #include <ros/ros.h>
 #include <geometry_msgs/Vector3.h>
+#include <vision_msgs/Detection2DArray.h>
 #include "ViewLink.h"
 #include "kari_dronecop_rd_payload_mgmt/payload_mc_gimbal_ctrl_cmd.h"
 
 class Gimbal {
 public:
     Gimbal(ros::NodeHandle& nh, ros::NodeHandle& nhp) 
-    : is_first_loop(true) 
+    : is_first_loop(true), ir_pip_disable_count(0)
     {
         // ROS Publisher & Subscriber 설정
-        cmd_sub = nh.subscribe("gimbal_cmd_deg", 1, &Gimbal::gimbalCmdCallback, this);
         pose_pub = nh.advertise<geometry_msgs::Vector3>("gimbal_pose_deg", 10);
+
+        cmd_sub = nh.subscribe("gimbal_cmd_deg", 1, &Gimbal::gimbalCmdCallback, this);
         gcs_cmd_sub = nh.subscribe("gcs_cmd", 1, &Gimbal::gcsCmdCallback, this);
+        detection_sub = nh.subscribe("detection", 1, &Gimbal::detectionCallback, this);
 
         rate_ms = nhp.param<int>("rate_ms", 200);
         rate_ms = std::min(std::max(rate_ms, 100), 5000);
@@ -127,6 +130,12 @@ public:
         }
     }
 
+    void detectionCallback(const vision_msgs::Detection2DArray::ConstPtr msg) {
+        if (msg->detections.size() > 0) {
+            // capture detection image for any detection
+        }
+    }
+
     void getGimbalPose() {
         std::cout << "getGimbalPose" <<std::endl;
         if (!VLK_IsTCPConnected()) {
@@ -137,6 +146,11 @@ public:
             VLK_Home();
             VLK_ZoomTo(1.0); //reset zoom to (X 1.0)
             is_first_loop = false;
+        }
+        if (ir_pip_disable_count++ < 50)
+        {
+            int iEnablePIP = 0;
+            VLK_SetImageColor(VLK_IMAGE_TYPE::VLK_IMAGE_TYPE_VISIBLE1, iEnablePIP, VLK_IR_COLOR::VLK_IR_COLOR_WHITEHOT);
         }
         // Query device configuration to trigger a telemetry update
         VLK_QueryDevConfiguration();
@@ -171,14 +185,20 @@ public:
         }
     }
 
+    // parameters
     int rate_ms;
     double cmd_multiple;
     double pan_ang_ref, tilt_ang_ref;
+
+    // loop control
     bool is_first_loop;
+    int ir_pip_disable_count;
+
+    // last variables
     double last_capture_time_sec;
 
 private:
-    ros::Subscriber cmd_sub, gcs_cmd_sub;
+    ros::Subscriber cmd_sub, gcs_cmd_sub, detection_sub;
     ros::Publisher pose_pub;
     
     // Telemetry data storage
