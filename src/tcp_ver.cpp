@@ -47,6 +47,8 @@ public:
             ROS_WARN_THROTTLE(1, "Gimbal not connected");
             ros::shutdown();
         }
+
+        last_capture_time_sec = ros::Time::now().toSec();
         ROS_INFO("Gimbal connected successfully");
     }
 
@@ -95,6 +97,7 @@ public:
         double zoom_pos_cmd = msg->zoom_pos_cmd;
         int homing_mode_cmd = msg->homing_mode_cmd;
         int netgun_mode_cmd = msg->netgun_mode_cmd;
+        int img_capture_cmd = msg->img_capture_cmd;
 
         ROS_INFO("Setting Gimbal Rate - pan rate: %.2f, tilt rate: %.2f", pan_rate_cmd, tilt_rate_cmd);
         VLK_Move(pan_rate_cmd * cmd_multiple, tilt_rate_cmd * cmd_multiple);
@@ -103,6 +106,10 @@ public:
         if (zoom_pos_cmd > 0.0) {
             ROS_INFO("Setting Gimbal Zoom: %.2f", zoom_pos_cmd);
             VLK_ZoomTo(zoom_pos_cmd);
+        }
+
+        if (img_capture_cmd) {
+            captureImage();
         }
 
         // 홈 기능 - zoom 다시 1배율로 set
@@ -155,10 +162,20 @@ public:
         pose_pub.publish(pose_msg);
     }
 
+    void captureImage() {
+        double time_now_sec = ros::Time::now().toSec();
+        if (time_now_sec - last_capture_time_sec > 1.0)
+        {
+            VLK_Photograph();
+            last_capture_time_sec = time_now_sec;
+        }
+    }
+
     int rate_ms;
     double cmd_multiple;
     double pan_ang_ref, tilt_ang_ref;
     bool is_first_loop;
+    double last_capture_time_sec;
 
 private:
     ros::Subscriber cmd_sub, gcs_cmd_sub;
