@@ -61,12 +61,27 @@ public:
     {
         double pan_rate_cmd = msg->pan_rate_cmd;
         double tilt_rate_cmd = msg->tilt_rate_cmd;
+        double zoom_pos_cmd = msg->zoom_pos_cmd;
+        int homing_mode_cmd = msg->homing_mode_cmd;
 
         ROS_INFO("Setting Gimbal Rate - pan rate: %.2f, tilt rate: %.2f", pan_rate_cmd, tilt_rate_cmd);
 
         // ViewLink SDK를 사용하여 짐벌 움직이기
         // VLK_TurnTo(yaw, pitch);  // 짐벌은 Roll을 직접 지원하지 않으므로 Pitch, Yaw만 사용
         VLK_Move(pan_rate_cmd * cmd_multiple, tilt_rate_cmd * cmd_multiple);
+
+        //zoom 기능
+        if (zoom_pos_cmd > 0.0) {
+            ROS_INFO("Setting Gimbal Zoom: %.2f", zoom_pos_cmd);
+            VLK_ZoomTo(zoom_pos_cmd);
+        }
+
+        // 홈 기능 - zoom 다시 1배율로 set
+        if (homing_mode_cmd == 1) {
+            ROS_INFO("Returning Gimbal to Home Position");
+            VLK_Home();  // 짐벌 초기 위치로 복귀
+            VLK_ZoomTo(1.0); //reset zoom to (X 1.0)
+        }
     }
 
     void getGimbalPose() {
