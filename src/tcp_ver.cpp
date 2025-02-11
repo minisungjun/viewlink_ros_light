@@ -1,3 +1,11 @@
+/**
+ * @file tcp_ver.cpp
+ * @brief Viewlink gimbal & image capture module using TCP interface
+ * @author Seungwook Lee, Sungjun Park
+ * @date 2025-02-12
+ * @note Saves detection images to ${HOME}/saved_images/<date>
+ */
+
 #include <ros/ros.h>
 #include <geometry_msgs/Vector3.h>
 #include <sensor_msgs/Image.h>
@@ -9,6 +17,13 @@
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/imgcodecs.hpp> 
 
+#include <filesystem>
+#include <ctime>
+#include <iomanip>
+#include <sys/stat.h>
+#include <pwd.h>
+
+namespace fs = std::filesystem;
 
 class Gimbal {
 public:
@@ -17,6 +32,36 @@ public:
     ir_pip_disable_count(0),
     detection_image_count(0)
     {
+        // Get home directory
+        const char* home_dir = getenv("HOME");
+        if (!home_dir) {
+            struct passwd* pwd = getpwuid(getuid());
+            if (pwd)
+                home_dir = pwd->pw_dir;
+        }
+
+        // Get current date for folder name
+        auto now = std::chrono::system_clock::now();
+        auto in_time_t = std::chrono::system_clock::to_time_t(now);
+        std::stringstream date_ss;
+        date_ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d");
+        
+        // Create default save path
+        if (home_dir) {
+            save_dir = std::string(home_dir) + "/saved_images/" + date_ss.str() + "/";
+        } else {
+            save_dir = "/tmp/saved_images/" + date_ss.str() + "/";
+            ROS_WARN("Could not determine HOME directory, using /tmp instead");
+        }
+
+        // Create directories if they don't exist
+        try {
+            fs::create_directories(save_dir);
+        } catch (const std::exception& e) {
+            ROS_ERROR("Failed to create save directory: %s", e.what());
+            ros::shutdown();
+        }
+
         // ROS Publisher & Subscriber 설정
         pose_pub = nh.advertise<geometry_msgs::Vector3>("gimbal_pose_deg", 10);
 
@@ -32,9 +77,8 @@ public:
         tilt_ang_ref = nhp.param<double>("netgun_tilt_ang_ref", -15.0);  // 기본값: -20.0도
 
         std::string format_string;
-        nhp.param("save_dir", save_dir, "/home/usrg/dronecop_ws/");
-        nhp.param("filename_format", format_string, std::string("left%04i.%s"));
-        nhp.param("encoding", encoding, std::string("bgr8"));
+        nhp.param<std::string>("filename_format", format_string, std::string("detection%04i.%s"));
+        nhp.param<std::string>("encoding", encoding, std::string("bgr8"));
         g_format.parse(format_string);
 
         // ViewLink SDK 초기화
@@ -174,30 +218,39 @@ public:
         }
 
         if (!image.empty()) {
-        try {
-            filename = (g_format).str();
-        } catch (...) { g_format.clear(); }
-        try {
-            filename = (g_format % detection_image_count).str();
-        } catch (...) { g_format.clear(); }
-        try { 
-            filename = (g_format % detection_image_count % "jpg").str();
-        } catch (...) { g_format.clear(); }
+            try {
+                filename = (g_format).str();
+            } catch (...) { g_format.clear(); }
+            try {
+                filename = (g_format % detection_image_count).str();
+            } catch (...) { g_format.clear(); }
+            try { 
+                filename = (g_format % detection_image_count % "jpg").str();
+            } catch (...) { g_format.clear(); }
 
-        if ( save_detection_image ) {
-            std::stringstream ss;
-            ss << ros::Time::now().toNSec();
-            std::string timestamp_str = ss.str();
-            filename.insert(0,timestamp_str);
+        
+            if (save_detection_image) {
+                // Create timestamp string in YYYY-MM-DD_HH-mm-ss format
+                auto now = std::chrono::system_clock::now();
+                auto in_time_t = std::chrono::system_clock::to_time_t(now);
+                std::stringstream timestamp_ss;
+                timestamp_ss << std::put_time(std::localtime(&in_time_t), "%H-%M-%S");
+                // timestamp_ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d_%H-%M-%S");
+                
+                // Construct final filename with timestamp
+                std::string final_filename = timestamp_ss.str() + "_" + filename;
+                std::string full_path = fs::path(save_dir) / final_filename;
 
-            cv::imwrite(save_dir+filename, image);
-            ROS_INFO("Saved image %s", filename.c_str());
-
-            save_detection_image = false;
-            detection_image_count++;
-        } else {
-            return false;
-        }
+                try {
+                    cv::imwrite(full_path, image);
+                    ROS_INFO("Saved image %s", full_path.c_str());
+                    save_detection_image = false;
+                    detection_image_count++;
+                } catch (const cv::Exception& e) {
+                    ROS_ERROR("Failed to save image: %s", e.what());
+                    return false;
+                }
+            }
         } else {
             ROS_WARN("Couldn't save image, no data!");
             return false;
@@ -285,7 +338,7 @@ private:
 };
 
 int main(int argc, char** argv) {
-    ros::init(argc, argv, "gimbal_control_node");
+    ros::init(argc, argv, "viewlink_ros_light");
     ros::NodeHandle nh, nhp("~");
 
     Gimbal gimbal(nh, nhp);

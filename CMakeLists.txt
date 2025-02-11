@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0.2)
 project(viewlink_ros_light)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-add_compile_options(-std=c++11)
+add_compile_options(-std=c++17)
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
     set(VIEWLINK_ARCH "aarch64")

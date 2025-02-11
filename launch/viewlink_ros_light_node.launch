@@ -1,9 +1,8 @@
 <launch>
   <!-- topics -->
-  <arg name="gcs_cmd" default="/rd2/eoir_from_gcs_cmd" />
-
-  <!-- detection image save dir -->
-  <arg name="save_dir" default="/home/usrg/dronecop_ws/" />
+  <arg name="ns" default="/" />
+  <arg name="gcs_cmd" default="eoir_from_gcs_cmd" />
+  <arg name="detection" default="yolo" />
 
   <!-- parameters -->
   <arg name="rate_ms" default="200" /> <!-- 100 ~ 5000 ms query interval (int) -->
@@ -11,12 +10,14 @@
   <arg name="netgun_pan_ang_ref" default="0.0" />
   <arg name="netgun_tilt_ang_ref" default="-15.0" />
 
-  <node name="viewlink_ros_light_node" pkg="viewlink_ros_light" type="viewlink_ros_light_node" output="screen">
-    <remap from="gcs_cmd" to="$(arg gcs_cmd)" />
-    <param name="save_dir" value="$(arg save_dir)" />
-    <param name="rate_ms" value="$(arg rate_ms)" />
-    <param name="gimbal_ip" value="$(arg gimbal_ip)" />
-    <param name="netgun_pan_ang_ref" value="$(arg netgun_pan_ang_ref)" />
-    <param name="netgun_tilt_ang_ref" value="$(arg netgun_tilt_ang_ref)" />
-  </node>
+  <group ns="$(arg ns)">
+    <node name="viewlink_ros_light_node" pkg="viewlink_ros_light" type="viewlink_ros_light_node" output="screen">
+      <remap from="gcs_cmd" to="$(arg gcs_cmd)" />
+      <remap from="detection" to="$(arg detection)" />
+      <param name="rate_ms" value="$(arg rate_ms)" />
+      <param name="gimbal_ip" value="$(arg gimbal_ip)" />
+      <param name="netgun_pan_ang_ref" value="$(arg netgun_pan_ang_ref)" />
+      <param name="netgun_tilt_ang_ref" value="$(arg netgun_tilt_ang_ref)" />
+    </node>
+  </group>
 </launch>
