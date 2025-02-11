@@ -21,6 +21,7 @@ message(STATUS "Using ViewLink library path: ${VIEWLINK_LIB_PATH}")
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
+  geometry_msgs
   #kari_dronecop_rd_payload_mgmt
 )
 

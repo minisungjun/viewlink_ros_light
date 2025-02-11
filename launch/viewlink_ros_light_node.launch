@@ -1,9 +1,11 @@
 <launch>
-  <!-- <arg name="rate_hz" default="1" /> -->
+  <arg name="rate_ms" default="200" /> <!-- 100 ~ 5000 ms query interval (int) -->
+  <arg name="gimbal_ip" default="10.10.10.102" />
   <arg name="gcs_cmd" default="/rd2/eoir_from_gcs_cmd" />
 
   <node name="viewlink_ros_light_node" pkg="viewlink_ros_light" type="viewlink_ros_light_node" output="screen">
-    <param name="rate_hz" value="$(arg rate_hz)" />
+    <param name="rate_ms" value="$(arg rate_ms)" />
+    <param name="gimbal_ip" value="$(arg gimbal_ip)" />
     <remap from="gcs_cmd" to="$(arg gcs_cmd)" />
   </node>
 </launch>
