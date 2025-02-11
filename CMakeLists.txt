@@ -24,8 +24,11 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   sensor_msgs
   vision_msgs
+  cv_bridge
   #kari_dronecop_rd_payload_mgmt
 )
+
+find_package(OpenCV 4 REQUIRED)
 
 ###################################
 ## catkin specific configuration ##
@@ -54,6 +57,7 @@ include_directories(
     ${VIEWLINK_LIB_PATH}
     # ${kari_dronecop_rd_payload_mgmt_INCLUDE_DIRS}
     ${catkin_INCLUDE_DIRS}
+    ${OpenCV_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
@@ -85,6 +89,7 @@ add_executable(${PROJECT_NAME}_node src/tcp_ver.cpp)
 target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
   ${VIEWLINK_LIB_PATH}/libViewLink.so
+  ${OpenCV_LIBRARIES}
 )
 
 #############

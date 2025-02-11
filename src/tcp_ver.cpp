@@ -1,13 +1,21 @@
 #include <ros/ros.h>
 #include <geometry_msgs/Vector3.h>
+#include <sensor_msgs/Image.h>
 #include <vision_msgs/Detection2DArray.h>
 #include "ViewLink.h"
 #include "kari_dronecop_rd_payload_mgmt/payload_mc_gimbal_ctrl_cmd.h"
 
+#include <boost/format.hpp>
+#include <cv_bridge/cv_bridge.h>
+#include <opencv2/imgcodecs.hpp> 
+
+
 class Gimbal {
 public:
     Gimbal(ros::NodeHandle& nh, ros::NodeHandle& nhp) 
-    : is_first_loop(true), ir_pip_disable_count(0)
+    : is_first_loop(true), 
+    ir_pip_disable_count(0),
+    detection_image_count(0)
     {
         // ROS Publisher & Subscriber 설정
         pose_pub = nh.advertise<geometry_msgs::Vector3>("gimbal_pose_deg", 10);
@@ -15,6 +23,7 @@ public:
         cmd_sub = nh.subscribe("gimbal_cmd_deg", 1, &Gimbal::gimbalCmdCallback, this);
         gcs_cmd_sub = nh.subscribe("gcs_cmd", 1, &Gimbal::gcsCmdCallback, this);
         detection_sub = nh.subscribe("detection", 1, &Gimbal::detectionCallback, this);
+        test_image_sub = nh.subscribe("/usb_cam/image_raw", 1, &Gimbal::testImageCallback, this);
 
         rate_ms = nhp.param<int>("rate_ms", 200);
         rate_ms = std::min(std::max(rate_ms, 100), 5000);
@@ -22,6 +31,11 @@ public:
         pan_ang_ref = nhp.param<double>("netgun_pan_ang_ref", 0.0);      // 기본값: 0.0도
         tilt_ang_ref = nhp.param<double>("netgun_tilt_ang_ref", -15.0);  // 기본값: -20.0도
 
+        std::string format_string;
+        nhp.param("save_dir", save_dir, "/home/usrg/dronecop_ws/");
+        nhp.param("filename_format", format_string, std::string("left%04i.%s"));
+        nhp.param("encoding", encoding, std::string("bgr8"));
+        g_format.parse(format_string);
 
         // ViewLink SDK 초기화
         if (VLK_Init() != VLK_ERROR_NO_ERROR) {
@@ -101,6 +115,7 @@ public:
         int homing_mode_cmd = msg->homing_mode_cmd;
         int netgun_mode_cmd = msg->netgun_mode_cmd;
         int img_capture_cmd = msg->img_capture_cmd;
+        save_detection_image = img_capture_cmd > 0 ? true : false;
 
         ROS_INFO("Setting Gimbal Rate - pan rate: %.2f, tilt rate: %.2f", pan_rate_cmd, tilt_rate_cmd);
         VLK_Move(pan_rate_cmd * cmd_multiple, tilt_rate_cmd * cmd_multiple);
@@ -132,8 +147,62 @@ public:
 
     void detectionCallback(const vision_msgs::Detection2DArray::ConstPtr msg) {
         if (msg->detections.size() > 0) {
-            // capture detection image for any detection
+            if (ros::Time::now().toSec() - last_capture_time_sec > 1.0 && save_detection_image) {
+                saveDetectionImages(msg->detections[0].source_img); // @TODO Check if the detection image is actually included
+            }
         }
+    }
+
+    void testImageCallback(const sensor_msgs::Image& msg) {
+        if (ros::Time::now().toSec() - last_capture_time_sec > 1.0 && save_detection_image) {
+            saveDetectionImages(msg); // @TODO Check if the detection image is actually included
+        }
+    }
+
+    bool saveDetectionImages(const sensor_msgs::Image& image_msg) {
+        // capture detection image for any detection
+        // ref: https://github.com/ros-perception/image_pipeline/blob/noetic/image_view/src/nodes/image_saver.cpp#L145
+        cv::Mat image;
+        std::string filename;
+        try
+        {
+            image = cv_bridge::toCvCopy(image_msg, encoding)->image;
+        } catch(cv_bridge::Exception)
+        {
+            ROS_ERROR("Unable to convert %s image to %s", image_msg.encoding.c_str(), encoding.c_str());
+            return false;
+        }
+
+        if (!image.empty()) {
+        try {
+            filename = (g_format).str();
+        } catch (...) { g_format.clear(); }
+        try {
+            filename = (g_format % detection_image_count).str();
+        } catch (...) { g_format.clear(); }
+        try { 
+            filename = (g_format % detection_image_count % "jpg").str();
+        } catch (...) { g_format.clear(); }
+
+        if ( save_detection_image ) {
+            std::stringstream ss;
+            ss << ros::Time::now().toNSec();
+            std::string timestamp_str = ss.str();
+            filename.insert(0,timestamp_str);
+
+            cv::imwrite(save_dir+filename, image);
+            ROS_INFO("Saved image %s", filename.c_str());
+
+            save_detection_image = false;
+            detection_image_count++;
+        } else {
+            return false;
+        }
+        } else {
+            ROS_WARN("Couldn't save image, no data!");
+            return false;
+        }
+        return true;
     }
 
     void getGimbalPose() {
@@ -197,8 +266,16 @@ public:
     // last variables
     double last_capture_time_sec;
 
+    // image saver
+    boost::format g_format;
+    bool save_detection_image;
+    int detection_image_count;
+    std::string encoding;
+    std::string save_dir;
+
 private:
-    ros::Subscriber cmd_sub, gcs_cmd_sub, detection_sub;
+    ros::Subscriber cmd_sub, gcs_cmd_sub;
+    ros::Subscriber detection_sub, test_image_sub;
     ros::Publisher pose_pub;
     
     // Telemetry data storage
