@@ -10,6 +10,8 @@ project(viewlink_ros_light)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
+  viewlink_eoir_ros
+  #kari_dronecop_rd_payload_mgmt
 )
 
 ## System dependencies are found with CMake's conventions
@@ -102,9 +104,9 @@ find_package(catkin REQUIRED COMPONENTS
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
- INCLUDE_DIRS /home/sungjun/drone_cop_ws/src/viewlink_ros_light/lib/libViewLink/x86_64
+ INCLUDE_DIRS /home/wavetc/catkin_ws/src/viewlink_ros_light/lib/libViewLink/aarch64/ 
 #  LIBRARIES viewlink_ros_light
-#  CATKIN_DEPENDS roscpp std_msgs
+ CATKIN_DEPENDS roscpp std_msgs viewlink_eoir_ros #kari_dronecop_rd_payload_mgmt
 #  DEPENDS system_lib
 )
 
@@ -115,9 +117,11 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-# include
-  /home/sungjun/drone_cop_ws/src/viewlink_ros_light/lib/libViewLink/x86_64
-  ${catkin_INCLUDE_DIRS}
+include
+/home/wavetc/catkin_ws/src/viewlink_ros_light/lib/libViewLink/aarch64/
+    ${viewlink_eoir_ros_INCLUDE_DIRS}
+    # ${kari_dronecop_rd_payload_mgmt_INCLUDE_DIRS}
+    ${catkin_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
@@ -148,7 +152,7 @@ add_executable(${PROJECT_NAME}_node src/tcp_ver.cpp)
 ## Specify libraries to link a library or executable target against
 target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
-  /home/sungjun/drone_cop_ws/src/viewlink_ros_light/lib/libViewLink/x86_64/libViewLink.so
+  /home/wavetc/catkin_ws/src/viewlink_ros_light/lib/libViewLink/aarch64/libViewLink.so
 )
 
 #############
