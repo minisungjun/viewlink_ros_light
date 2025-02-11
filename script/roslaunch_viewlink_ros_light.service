@@ -1,0 +1,14 @@
+[Unit]
+Description=roslaunch_tracking_guidance
+After=roscore.service
+
+[Service]
+ExecStartPre=/bin/sleep 30 
+ExecStart=/bin/bash -c "source ${HOME}/catkin_ws/devel/setup.bash; roslaunch viewlink_ros_light viewlink_ros_light.launch ns:=rd2 --wait"
+EnvironmentFile=/etc/env_kari_dronecop_rd
+Group=wavetc
+Restart=on-abort
+RestartSec=5
+
+[Install]
+WantedBy=default.target
