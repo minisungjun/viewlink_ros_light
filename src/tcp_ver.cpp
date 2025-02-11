@@ -13,6 +13,7 @@ public:
 
         rate_hz = nhp.param<double>("rate", 30);
         ros::Rate rate(rate_hz);  // 30Hz
+        cmd_multiple = nhp.param<double>("cmd_multiple", 10000);
 
         // ViewLink SDK 초기화
         if (VLK_Init() != VLK_ERROR_NO_ERROR) {
@@ -65,7 +66,7 @@ public:
 
         // ViewLink SDK를 사용하여 짐벌 움직이기
         // VLK_TurnTo(yaw, pitch);  // 짐벌은 Roll을 직접 지원하지 않으므로 Pitch, Yaw만 사용
-        VLK_Move(pan_rate_cmd, tilt_rate_cmd);
+        VLK_Move(pan_rate_cmd * cmd_multiple, tilt_rate_cmd * cmd_multiple);
     }
 
     void getGimbalPose() {
@@ -85,6 +86,7 @@ public:
     }
 
     double rate_hz;
+    double cmd_multiple;
 
 private:
     ros::Subscriber cmd_sub, gcs_cmd_sub;
