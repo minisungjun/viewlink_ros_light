@@ -5,7 +5,9 @@
 
 class Gimbal {
 public:
-    Gimbal(ros::NodeHandle& nh, ros::NodeHandle& nhp) {
+    Gimbal(ros::NodeHandle& nh, ros::NodeHandle& nhp) 
+    : is_first_loop(true) 
+    {
         // ROS Publisher & Subscriber 설정
         cmd_sub = nh.subscribe("gimbal_cmd_deg", 1, &Gimbal::gimbalCmdCallback, this);
         pose_pub = nh.advertise<geometry_msgs::Vector3>("gimbal_pose_deg", 10);
@@ -124,7 +126,11 @@ public:
             ROS_WARN_THROTTLE(1, "Gimbal not connected");
             return;
         }
-
+        if (is_first_loop) {
+            VLK_Home();
+            VLK_ZoomTo(1.0); //reset zoom to (X 1.0)
+            is_first_loop = false;
+        }
         // Query device configuration to trigger a telemetry update
         VLK_QueryDevConfiguration();
 
@@ -152,6 +158,7 @@ public:
     int rate_ms;
     double cmd_multiple;
     double pan_ang_ref, tilt_ang_ref;
+    bool is_first_loop;
 
 private:
     ros::Subscriber cmd_sub, gcs_cmd_sub;
