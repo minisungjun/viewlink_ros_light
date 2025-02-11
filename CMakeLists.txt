@@ -25,6 +25,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   vision_msgs
   cv_bridge
+  kari_dronecop_rd_imgproc
   #kari_dronecop_rd_payload_mgmt
 )
 

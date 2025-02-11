@@ -12,6 +12,7 @@
 #include <vision_msgs/Detection2DArray.h>
 #include "ViewLink.h"
 #include "kari_dronecop_rd_payload_mgmt/payload_mc_gimbal_ctrl_cmd.h"
+#include "kari_dronecop_rd_imgproc/BoundingBoxes.h"
 
 #include <boost/format.hpp>
 #include <cv_bridge/cv_bridge.h>
@@ -42,9 +43,9 @@ public:
 
         // Get current date for folder name
         auto now = std::chrono::system_clock::now();
-        auto in_time_t = std::chrono::system_clock::to_time_t(now);
+        auto in_time_tv = std::chrono::system_clock::to_time_t(now);
         std::stringstream date_ss;
-        date_ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d");
+        date_ss << std::put_time(std::localtime(&in_time_tv), "%Y-%m-%d");
         
         // Create default save path
         if (home_dir) {
@@ -68,7 +69,7 @@ public:
         cmd_sub = nh.subscribe("gimbal_cmd_deg", 1, &Gimbal::gimbalCmdCallback, this);
         gcs_cmd_sub = nh.subscribe("gcs_cmd", 1, &Gimbal::gcsCmdCallback, this);
         detection_sub = nh.subscribe("detection", 1, &Gimbal::detectionCallback, this);
-        test_image_sub = nh.subscribe("/usb_cam/image_raw", 1, &Gimbal::testImageCallback, this);
+        // test_image_sub = nh.subscribe("/usb_cam/image_raw", 1, &Gimbal::testImageCallback, this);
 
         rate_ms = nhp.param<int>("rate_ms", 200);
         rate_ms = std::min(std::max(rate_ms, 100), 5000);
@@ -110,6 +111,20 @@ public:
         }
 
         last_capture_time_sec = ros::Time::now().toSec();
+        last_gcs_cmd_callback = ros::Time::now().toSec();
+
+        // Create timestamp string in YYYY-MM-DD_HH-mm-ss format
+        auto nowv = std::chrono::system_clock::now();
+        auto in_time_t = std::chrono::system_clock::to_time_t(nowv);
+        std::stringstream timestamp_ss;
+        timestamp_ss << std::put_time(std::localtime(&in_time_t), "%H-%M-%S");
+        // timestamp_ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d_%H-%M-%S");
+        
+        // Construct final filename with timestamp
+        std::string final_filename = timestamp_ss.str() + "_";
+        std::string full_path = fs::path(save_dir) / final_filename;
+        ROS_INFO("Saved image path: %s", full_path.c_str());
+
         ROS_INFO("Gimbal connected successfully");
     }
 
@@ -152,6 +167,9 @@ public:
 
     void gcsCmdCallback(const kari_dronecop_rd_payload_mgmt::payload_mc_gimbal_ctrl_cmd::ConstPtr msg) {
         std::lock_guard<std::mutex> lock(telemetry_mutex);
+        if (ros::Time::now().toSec() - last_gcs_cmd_callback < 0.5) {
+            return;
+        }
         // std::cout << "gcsCmdCallback" <<std::endl;
         double pan_rate_cmd = msg->pan_rate_cmd;
         double tilt_rate_cmd = msg->tilt_rate_cmd;
@@ -187,12 +205,16 @@ public:
             // Netgun 정렬을 위한 Pan, Tilt 값 - launch file
             VLK_TurnTo(pan_ang_ref, tilt_ang_ref);  // Netgun 정렬을 위한 Pan, Tilt 값 설정
         }
+        last_gcs_cmd_callback = ros::Time::now().toSec();
     }
 
-    void detectionCallback(const vision_msgs::Detection2DArray::ConstPtr msg) {
-        if (msg->detections.size() > 0) {
-            if (ros::Time::now().toSec() - last_capture_time_sec > 1.0 && save_detection_image) {
-                saveDetectionImages(msg->detections[0].source_img); // @TODO Check if the detection image is actually included
+    void detectionCallback(const kari_dronecop_rd_imgproc::BoundingBoxes::ConstPtr msg) {
+        // void detectionCallback(const vision_msgs::Detection2DArray::ConstPtr msg) {
+        if (msg->bounding_boxes.size() > 0) {
+            double time_now_sec = ros::Time::now().toSec();
+            if (time_now_sec - last_capture_time_sec > 1.0 && save_detection_image) {
+                saveDetectionImages(msg->img_ros_res); // @TODO Check if the detection image is actually included
+                last_capture_time_sec = time_now_sec;
             }
         }
     }
@@ -243,8 +265,8 @@ public:
 
                 try {
                     cv::imwrite(full_path, image);
-                    ROS_INFO("Saved image %s", full_path.c_str());
-                    save_detection_image = false;
+                    ROS_WARN("Saved image %s", full_path.c_str());
+                    // save_detection_image = false;
                     detection_image_count++;
                 } catch (const cv::Exception& e) {
                     ROS_ERROR("Failed to save image: %s", e.what());
@@ -303,7 +325,6 @@ public:
         if (time_now_sec - last_capture_time_sec > 1.0)
         {
             VLK_Photograph();
-            last_capture_time_sec = time_now_sec;
         }
     }
 
@@ -318,6 +339,7 @@ public:
 
     // last variables
     double last_capture_time_sec;
+    double last_gcs_cmd_callback;
 
     // image saver
     boost::format g_format;

@@ -55,6 +55,7 @@
   <build_depend>sensor_msgs</build_depend>
   <build_depend>vision_msgs</build_depend>
   <build_depend>cv_bridge</build_depend>
+  <build_depend>kari_dronecop_rd_imgproc</build_depend>
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>
   <exec_depend>roscpp</exec_depend>
@@ -63,6 +64,7 @@
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>vision_msgs</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>kari_dronecop_rd_imgproc</exec_depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->
