@@ -23,6 +23,7 @@ public:
 
         // Register device status callback
         VLK_RegisterDevStatusCB(Gimbal::DeviceStatusCallback, this);
+        VLK_SetKeepAliveInterval(100);
 
         // TCP 연결 설정
         VLK_CONN_PARAM connParam;
@@ -56,11 +57,15 @@ public:
     // Update telemetry data (called from callback)
     void updateTelemetry(const VLK_DEV_TELEMETRY& newTelemetry) {
         std::lock_guard<std::mutex> lock(telemetry_mutex);
+        // std::cout << "updateTelemetry" <<std::endl;
         current_telemetry = newTelemetry;
         telemetry_updated = true;
+        getGimbalPose();
     }
 
     void gimbalCmdCallback(const std_msgs::Float32MultiArray::ConstPtr& msg) {
+        std::lock_guard<std::mutex> lock(telemetry_mutex);
+        // std::cout << "gimbalCmdCB" <<std::endl;
         if (msg->data.size() < 3) {
             ROS_WARN("Received invalid gimbal command");
             return;
@@ -77,6 +82,8 @@ public:
     }
 
     void gcsCmdCallback(const kari_dronecop_rd_payload_mgmt::payload_mc_gimbal_ctrl_cmd::ConstPtr msg) {
+        std::lock_guard<std::mutex> lock(telemetry_mutex);
+        // std::cout << "gcsCmdCallback" <<std::endl;
         double pan_rate_cmd = msg->pan_rate_cmd;
         double tilt_rate_cmd = msg->tilt_rate_cmd;
         double zoom_pos_cmd = msg->zoom_pos_cmd;
@@ -100,6 +107,7 @@ public:
     }
 
     void getGimbalPose() {
+        std::cout << "getGimbalPose" <<std::endl;
         if (!VLK_IsTCPConnected()) {
             ROS_WARN_THROTTLE(1, "Gimbal not connected");
             return;
@@ -111,12 +119,13 @@ public:
         // Get latest telemetry data
         VLK_DEV_TELEMETRY telemetry;
         {
-            std::lock_guard<std::mutex> lock(telemetry_mutex);
             if (!telemetry_updated) {
                 ROS_WARN_THROTTLE(1, "No telemetry data available");
                 return;
             }
             telemetry = current_telemetry;
+            ROS_INFO("telem pitch: %.2f", telemetry.dPitch);
+            ROS_INFO("telem yaw  : %.2f", telemetry.dYaw);
         }
 
         // Publish pose data
@@ -149,11 +158,12 @@ int main(int argc, char** argv) {
     Gimbal gimbal(nh, nhp);
     ros::Rate rate(gimbal.rate_hz);
 
-    while (ros::ok()) {
-        gimbal.getGimbalPose();  // Now we can safely call this
-        ros::spinOnce();
-        rate.sleep();
-    }
+    // while (ros::ok()) {
+    //     // gimbal.getGimbalPose();  // Now we can safely call this
+    //     ros::spinOnce();
+    //     rate.sleep();
+    // }
+    ros::spin();
 
     return 0;
 }

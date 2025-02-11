@@ -1,5 +1,5 @@
 <launch>
-  <arg name="rate_hz" default="30" />
+  <!-- <arg name="rate_hz" default="1" /> -->
   <arg name="gcs_cmd" default="/rd2/eoir_from_gcs_cmd" />
 
   <node name="viewlink_ros_light_node" pkg="viewlink_ros_light" type="viewlink_ros_light_node" output="screen">
