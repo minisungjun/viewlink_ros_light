@@ -14,6 +14,9 @@ public:
         rate_ms = nhp.param<int>("rate_ms", 200);
         rate_ms = std::min(std::max(rate_ms, 100), 5000);
         cmd_multiple = nhp.param<double>("cmd_multiple", 10000);
+        pan_ang_ref = nhp.param<double>("pan_ang_ref", 0.0);      // 기본값: 0.0도
+        tilt_ang_ref = nhp.param<double>("tilt_ang_ref", -15.0);  // 기본값: -20.0도
+
 
         // ViewLink SDK 초기화
         if (VLK_Init() != VLK_ERROR_NO_ERROR) {
@@ -89,6 +92,7 @@ public:
         double tilt_rate_cmd = msg->tilt_rate_cmd;
         double zoom_pos_cmd = msg->zoom_pos_cmd;
         int homing_mode_cmd = msg->homing_mode_cmd;
+        int netgun_mode_cmd = msg->netgun_mode_cmd;
 
         ROS_INFO("Setting Gimbal Rate - pan rate: %.2f, tilt rate: %.2f", pan_rate_cmd, tilt_rate_cmd);
         VLK_Move(pan_rate_cmd * cmd_multiple, tilt_rate_cmd * cmd_multiple);
@@ -100,10 +104,16 @@ public:
         }
 
         // 홈 기능 - zoom 다시 1배율로 set
-        if (homing_mode_cmd == 1) {
+        else if (homing_mode_cmd == 1) {
             ROS_INFO("Returning Gimbal to Home Position");
             VLK_Home();  // 짐벌 초기 위치로 복귀
             VLK_ZoomTo(1.0); //reset zoom to (X 1.0)
+        }
+        //assume no zoom & netgun at same time
+        else if(netgun_mode_cmd == 1){
+            ROS_INFO("Activating Netgun Mode - Aligning Gimbal");
+            // Netgun 정렬을 위한 Pan, Tilt 값 - launch file
+            VLK_TurnTo(pan_ang_ref, tilt_ang_ref);  // Netgun 정렬을 위한 Pan, Tilt 값 설정
         }
     }
 
